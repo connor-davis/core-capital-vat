@@ -8,7 +8,13 @@
  * @module
  */
 
+import type * as crons from "../crons.js";
+import type * as reporting from "../reporting.js";
+import type * as retention from "../retention.js";
 import type * as users from "../users.js";
+import type * as validators from "../validators.js";
+import type * as videoProcessing from "../videoProcessing.js";
+import type * as videos from "../videos.js";
 
 import type {
   ApiFromModules,
@@ -17,7 +23,13 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  crons: typeof crons;
+  reporting: typeof reporting;
+  retention: typeof retention;
   users: typeof users;
+  validators: typeof validators;
+  videoProcessing: typeof videoProcessing;
+  videos: typeof videos;
 }>;
 
 /**

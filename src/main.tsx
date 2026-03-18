@@ -6,6 +6,7 @@ import ReactDOM from 'react-dom/client';
 
 import { ConvexProviderWithAuthKit } from '@convex-dev/workos';
 
+import './index.css';
 // Import the generated route tree
 import { routeTree } from './routeTree.gen';
 

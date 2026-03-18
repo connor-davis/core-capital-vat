@@ -7,8 +7,10 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 const RootLayout = () => (
   <ThemeProvider storageKey="theme" defaultTheme="system">
     <TooltipProvider>
-      <div className="flex flex-col w-screen h-screen bg-background text-foreground">
-        <Outlet />
+      <div className="flex flex-col w-screen h-screen bg-background text-foreground overflow-hidden">
+        <div className="flex flex-col w-full h-full overflow-y-auto">
+          <Outlet />
+        </div>
 
         <Toaster />
       </div>
