@@ -1,11 +1,19 @@
 import { Outlet, createRootRoute } from '@tanstack/react-router';
-import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
+
+import { ThemeProvider } from '@/components/theme-provider';
+import { Toaster } from '@/components/ui/sonner';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 const RootLayout = () => (
-  <div className="flex flex-col w-screen h-screen bg-background text-foreground">
-    <Outlet />
-    <TanStackRouterDevtools />
-  </div>
+  <ThemeProvider storageKey="theme" defaultTheme="system">
+    <TooltipProvider>
+      <div className="flex flex-col w-screen h-screen bg-background text-foreground">
+        <Outlet />
+
+        <Toaster />
+      </div>
+    </TooltipProvider>
+  </ThemeProvider>
 );
 
 export const Route = createRootRoute({ component: RootLayout });
