@@ -258,7 +258,16 @@ function ReportContent() {
                     <p className="font-medium">
                       {criterion.id}. {criterion.name}
                     </p>
-                    <div className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                    <div
+                      className={[
+                        'rounded-full px-3 py-1 text-xs font-medium',
+                        criterion.score === 2
+                          ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                          : criterion.score === 1
+                            ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                            : 'bg-red-500/15 text-red-600 dark:text-red-400',
+                      ].join(' ')}
+                    >
                       Score {criterion.score}/2
                     </div>
                   </div>

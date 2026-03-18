@@ -12,8 +12,8 @@ const statusLabels: Record<VideoStatus, string> = {
 };
 
 const statusClasses: Record<VideoStatus, string> = {
-  queued: 'bg-secondary text-secondary-foreground',
-  processing: 'bg-primary text-primary-foreground',
+  queued: 'bg-neutral-700/15 text-neutral-700 dark:text-neutral-300',
+  processing: 'bg-blue-700/15 text-blue-700 dark:text-blue-300',
   completed: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
   failed: 'bg-destructive/10 text-destructive',
   deleted: 'bg-muted text-muted-foreground',
