@@ -1,9 +1,5 @@
 import { ConvexError, v } from 'convex/values';
 
-import {
-  REPORT_RETENTION_DAYS,
-  SOURCE_FILE_RETENTION_HOURS,
-} from '../shared/qa';
 import { internal } from './_generated/api';
 import type { Doc } from './_generated/dataModel';
 import {
@@ -13,6 +9,9 @@ import {
   query,
 } from './_generated/server';
 import { qaResultValidator } from './validators';
+
+const SOURCE_FILE_RETENTION_HOURS = 6;
+const REPORT_RETENTION_DAYS = 30;
 
 type AuthContext = {
   auth: {

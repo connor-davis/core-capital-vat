@@ -9,6 +9,7 @@
  */
 
 import type * as crons from "../crons.js";
+import type * as qa from "../qa.js";
 import type * as reporting from "../reporting.js";
 import type * as retention from "../retention.js";
 import type * as users from "../users.js";
@@ -24,6 +25,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   crons: typeof crons;
+  qa: typeof qa;
   reporting: typeof reporting;
   retention: typeof retention;
   users: typeof users;
