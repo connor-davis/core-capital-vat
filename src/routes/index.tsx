@@ -17,6 +17,7 @@ import {
 import type { ChangeEvent, DragEvent, ReactNode } from 'react';
 import { useMemo, useRef, useState } from 'react';
 
+import { PageHeader } from '@/components/page-header';
 import { VideoStatusBadge } from '@/components/qa/video-status-badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -37,29 +38,13 @@ export const Route = createFileRoute('/')({
 });
 
 function RouteComponent() {
-  const { user, signIn, signOut } = useAuth();
+  const { user, signIn } = useAuth();
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border/60 bg-background/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-              Core Capital QA
-            </p>
-            <h1 className="text-lg font-semibold">Lesson Review Automation</h1>
-          </div>
+    <>
+      <PageHeader breadcrumbs={[{ label: 'Dashboard' }]} />
 
-          <Button
-            variant="outline"
-            onClick={() => (user ? signOut() : void signIn())}
-          >
-            {user ? 'Sign out' : 'Sign in'}
-          </Button>
-        </div>
-      </header>
-
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8">
+      <main className="flex flex-1 flex-col gap-6 p-6">
         <section className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
           <Card className="border border-border/60">
             <CardHeader>
@@ -131,7 +116,7 @@ function RouteComponent() {
           <SignedOutState />
         </Unauthenticated>
       </main>
-    </div>
+    </>
   );
 }
 

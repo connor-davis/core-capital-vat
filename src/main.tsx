@@ -1,11 +1,13 @@
 import { RouterProvider, createRouter } from '@tanstack/react-router';
 import { AuthKitProvider, useAuth } from '@workos-inc/authkit-react';
 import { ConvexReactClient } from 'convex/react';
+import type { ReactNode } from 'react';
 import { StrictMode } from 'react';
 import ReactDOM from 'react-dom/client';
 
 import { ConvexProviderWithAuthKit } from '@convex-dev/workos';
 
+import { useAuthSync } from './hooks/use-auth-sync';
 import './index.css';
 // Import the generated route tree
 import { routeTree } from './routeTree.gen';
@@ -22,6 +24,11 @@ declare module '@tanstack/react-router' {
   }
 }
 
+function AuthSyncProvider({ children }: { children: ReactNode }) {
+  useAuthSync();
+  return children;
+}
+
 // Render the app
 const rootElement = document.getElementById('root')!;
 if (!rootElement.innerHTML) {
@@ -33,7 +40,9 @@ if (!rootElement.innerHTML) {
         redirectUri={import.meta.env.VITE_WORKOS_REDIRECT_URI}
       >
         <ConvexProviderWithAuthKit client={convex} useAuth={useAuth}>
-          <RouterProvider router={router} />
+          <AuthSyncProvider>
+            <RouterProvider router={router} />
+          </AuthSyncProvider>
         </ConvexProviderWithAuthKit>
       </AuthKitProvider>
     </StrictMode>

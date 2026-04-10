@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+/** The built-in default rubric. Kept here for backwards-compat and seeding. */
 export const RUBRIC_CRITERIA = [
   { id: 1, name: 'Lesson opening and expectations' },
   { id: 2, name: 'Warm-up and engagement' },
@@ -33,11 +34,11 @@ export const VIDEO_STATUSES = [
 ] as const;
 
 export const PASSING_SCORE = 80;
-export const MAX_RUBRIC_SCORE = RUBRIC_CRITERIA.length * 2;
 export const SOURCE_FILE_RETENTION_HOURS = 6;
 export const REPORT_RETENTION_DAYS = 30;
 export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-pro';
 
+export type RubricCriterion = { id: number; name: string };
 export type VideoStatus = (typeof VIDEO_STATUSES)[number];
 
 export const qaCriterionSchema = z.object({
@@ -51,28 +52,40 @@ export const qaResultSchema = z.object({
   overallScore: z.number().min(0).max(100),
   passed: z.boolean(),
   confidence: z.number().min(0).max(1),
-  criteria: z.array(qaCriterionSchema).length(RUBRIC_CRITERIA.length),
+  criteria: z.array(qaCriterionSchema),
 });
 
 export type QaCriterion = z.infer<typeof qaCriterionSchema>;
 export type QaResult = z.infer<typeof qaResultSchema>;
 
-export function buildQaSystemPrompt(fileName: string) {
-  const rubricLines = RUBRIC_CRITERIA.map(
-    (criterion) =>
-      `${criterion.id}. ${criterion.name} — score with 0, 1, or 2 only.`
-  ).join('\n');
+/**
+ * Build the Gemini system prompt using the given rubric criteria and passing
+ * score. Falls back to the built-in default when no custom rubric is provided.
+ */
+export function buildQaSystemPrompt(
+  fileName: string,
+  rubricCriteria: ReadonlyArray<RubricCriterion> = RUBRIC_CRITERIA,
+  passingScore: number = PASSING_SCORE
+) {
+  const maxScore = rubricCriteria.length * 2;
+
+  const rubricLines = rubricCriteria
+    .map(
+      (criterion) =>
+        `${criterion.id}. ${criterion.name} — score with 0, 1, or 2 only.`
+    )
+    .join('\n');
 
   return [
     'You are an expert QA Reviewer for online ESL teaching sessions.',
-    `Evaluate the uploaded lesson recording "${fileName}" against the 21-point rubric below.`,
+    `Evaluate the uploaded lesson recording "${fileName}" against the ${rubricCriteria.length}-point rubric below.`,
     '',
     'Scoring rules:',
     '1. Score every criterion with 0, 1, or 2 only.',
     '2. Use the rationale field to justify the score with evidence from the lesson.',
     '3. Set confidence between 0 and 1.',
-    `4. Calculate overallScore as (sum(criteria scores) / ${MAX_RUBRIC_SCORE}) * 100.`,
-    `5. Set passed to true when overallScore is greater than or equal to ${PASSING_SCORE}.`,
+    `4. Calculate overallScore as (sum(criteria scores) / ${maxScore}) * 100.`,
+    `5. Set passed to true when overallScore is greater than or equal to ${passingScore}.`,
     '',
     'Rubric:',
     rubricLines,
@@ -83,7 +96,7 @@ export function buildQaSystemPrompt(fileName: string) {
         overallScore: 85,
         passed: true,
         confidence: 0.9,
-        criteria: RUBRIC_CRITERIA.map((criterion) => ({
+        criteria: rubricCriteria.map((criterion) => ({
           id: criterion.id,
           name: criterion.name,
           score: 2,

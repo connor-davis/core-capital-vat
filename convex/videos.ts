@@ -1,47 +1,23 @@
 import { ConvexError, v } from 'convex/values';
 
 import { internal } from './_generated/api';
-import type { Doc } from './_generated/dataModel';
 import {
   internalMutation,
   internalQuery,
   mutation,
   query,
 } from './_generated/server';
-import { qaResultValidator } from './validators';
+import { getAuthContext, getOptionalAuthContext } from './authHelpers';
+import { qaResultValidator, rubricCriterionValidator } from './validators';
 
 const SOURCE_FILE_RETENTION_HOURS = 6;
 const REPORT_RETENTION_DAYS = 30;
-
-type AuthContext = {
-  auth: {
-    getUserIdentity(): Promise<{ tokenIdentifier: string } | null>;
-  };
-};
-
-async function getIdentityOrThrow(ctx: AuthContext) {
-  const identity = await ctx.auth.getUserIdentity();
-
-  if (!identity) {
-    throw new ConvexError('You must be signed in to manage QA videos.');
-  }
-
-  return identity;
-}
-
-function ensureViewerAccess(video: Doc<'videos'> | null, userId: string) {
-  if (!video || video.userId !== userId) {
-    throw new ConvexError('The requested QA video could not be found.');
-  }
-
-  return video;
-}
 
 export const generateUploadUrl = mutation({
   args: {},
   returns: v.string(),
   handler: async (ctx) => {
-    await getIdentityOrThrow(ctx);
+    await getAuthContext(ctx);
     return ctx.storage.generateUploadUrl();
   },
 });
@@ -55,17 +31,30 @@ export const createVideo = mutation({
   },
   returns: v.id('videos'),
   handler: async (ctx, args) => {
-    const identity = await getIdentityOrThrow(ctx);
+    const { user, organization } = await getAuthContext(ctx);
     const now = Date.now();
     const retainUntil = now + REPORT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
+    // Snapshot the organization's active rubric at upload time.
+    const rubric = await ctx.db
+      .query('rubrics')
+      .withIndex('by_organization', (q) =>
+        q.eq('organizationId', organization._id)
+      )
+      .order('desc')
+      .first();
+
     const videoId = await ctx.db.insert('videos', {
-      userId: identity.tokenIdentifier,
+      organizationId: organization._id,
+      createdByUserId: user._id,
       fileName: args.fileName,
       mimeType: args.mimeType,
       sizeBytes: args.sizeBytes,
       sourceStorageId: args.sourceStorageId,
       status: 'queued',
+      rubricSnapshot: rubric
+        ? { criteria: rubric.criteria, passingScore: rubric.passingScore }
+        : undefined,
       createdAt: now,
       updatedAt: now,
       retainUntil,
@@ -85,11 +74,13 @@ export const retryVideo = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const identity = await getIdentityOrThrow(ctx);
-    const video = ensureViewerAccess(
-      await ctx.db.get(args.videoId),
-      identity.tokenIdentifier
-    );
+    const { organization } = await getAuthContext(ctx);
+    const video = await ctx.db.get(args.videoId);
+
+    if (!video || video.organizationId !== organization._id) {
+      throw new ConvexError('The requested QA video could not be found.');
+    }
+
     const now = Date.now();
 
     await ctx.db.patch(video._id, {
@@ -114,15 +105,17 @@ export const retryVideo = mutation({
 export const listForViewer = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const authCtx = await getOptionalAuthContext(ctx);
 
-    if (!identity) {
+    if (!authCtx) {
       return [];
     }
 
     return ctx.db
       .query('videos')
-      .withIndex('by_user', (q) => q.eq('userId', identity.tokenIdentifier))
+      .withIndex('by_organization', (q) =>
+        q.eq('organizationId', authCtx.organization._id)
+      )
       .order('desc')
       .collect();
   },
@@ -133,16 +126,18 @@ export const getForViewer = query({
     videoId: v.id('videos'),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const authCtx = await getOptionalAuthContext(ctx);
 
-    if (!identity) {
+    if (!authCtx) {
       return null;
     }
 
-    const video = ensureViewerAccess(
-      await ctx.db.get(args.videoId),
-      identity.tokenIdentifier
-    );
+    const video = await ctx.db.get(args.videoId);
+
+    if (!video || video.organizationId !== authCtx.organization._id) {
+      throw new ConvexError('The requested QA video could not be found.');
+    }
+
     const sourceUrl =
       video.sourceDeletedAt === undefined
         ? await ctx.storage.getUrl(video.sourceStorageId)

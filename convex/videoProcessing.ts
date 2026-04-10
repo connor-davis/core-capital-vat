@@ -2,6 +2,16 @@ import { v } from 'convex/values';
 
 import { internal } from './_generated/api';
 import { internalAction } from './_generated/server';
+import {
+  DEFAULT_RUBRIC_CRITERIA,
+  DEFAULT_PASSING_SCORE,
+} from './rubrics';
+
+import {
+  buildQaSystemPrompt,
+  DEFAULT_GEMINI_MODEL,
+  type RubricCriterion,
+} from '../shared/qa';
 
 type GeminiFile = {
   name: string;
@@ -15,34 +25,6 @@ type GeminiFilePayload = GeminiFile | { file?: GeminiFile };
 declare const process: {
   env: Record<string, string | undefined>;
 };
-
-const RUBRIC_CRITERIA = [
-  { id: 1, name: 'Lesson opening and expectations' },
-  { id: 2, name: 'Warm-up and engagement' },
-  { id: 3, name: 'Teacher energy and presence' },
-  { id: 4, name: 'Rapport with the learner' },
-  { id: 5, name: 'Pacing and time management' },
-  { id: 6, name: 'Instruction clarity' },
-  { id: 7, name: 'Concept checking' },
-  { id: 8, name: 'Pronunciation modeling' },
-  { id: 9, name: 'Error correction quality' },
-  { id: 10, name: 'Student talk time balance' },
-  { id: 11, name: 'Use of scaffolding' },
-  { id: 12, name: 'Adaptation to learner level' },
-  { id: 13, name: 'Use of visuals and gestures' },
-  { id: 14, name: 'Classroom language accuracy' },
-  { id: 15, name: 'Activity transition management' },
-  { id: 16, name: 'Feedback specificity' },
-  { id: 17, name: 'Checking for understanding' },
-  { id: 18, name: 'Use of praise and encouragement' },
-  { id: 19, name: 'Lesson objective completion' },
-  { id: 20, name: 'Closing and recap' },
-  { id: 21, name: 'Professionalism and compliance' },
-] as const;
-
-const DEFAULT_GEMINI_MODEL = 'gemini-2.5-pro';
-const PASSING_SCORE = 80;
-const MAX_RUBRIC_SCORE = RUBRIC_CRITERIA.length * 2;
 
 type QaCriterion = {
   id: number;
@@ -64,45 +46,6 @@ function getErrorMessage(error: unknown) {
   }
 
   return 'An unknown processing error occurred.';
-}
-
-function buildQaSystemPrompt(fileName: string) {
-  const rubricLines = RUBRIC_CRITERIA.map(
-    (criterion) =>
-      `${criterion.id}. ${criterion.name} — score with 0, 1, or 2 only.`
-  ).join('\n');
-
-  return [
-    'You are an expert QA Reviewer for online ESL teaching sessions.',
-    `Evaluate the uploaded lesson recording "${fileName}" against the 21-point rubric below.`,
-    '',
-    'Scoring rules:',
-    '1. Score every criterion with 0, 1, or 2 only.',
-    '2. Use the rationale field to justify the score with evidence from the lesson.',
-    '3. Set confidence between 0 and 1.',
-    `4. Calculate overallScore as (sum(criteria scores) / ${MAX_RUBRIC_SCORE}) * 100.`,
-    `5. Set passed to true when overallScore is greater than or equal to ${PASSING_SCORE}.`,
-    '',
-    'Rubric:',
-    rubricLines,
-    '',
-    'Return only valid JSON with this shape:',
-    JSON.stringify(
-      {
-        overallScore: 85,
-        passed: true,
-        confidence: 0.9,
-        criteria: RUBRIC_CRITERIA.map((criterion) => ({
-          id: criterion.id,
-          name: criterion.name,
-          score: 2,
-          rationale: 'Evidence-based explanation',
-        })),
-      },
-      null,
-      2
-    ),
-  ].join('\n');
 }
 
 function normalizeJsonResponse(payload: string) {
@@ -138,7 +81,10 @@ function extractGeminiFile(payload: GeminiFilePayload): GeminiFile {
   return payload.file;
 }
 
-function parseQaResult(payload: unknown): QaResult {
+function parseQaResult(
+  payload: unknown,
+  expectedCriteriaCount: number
+): QaResult {
   if (typeof payload !== 'object' || payload === null) {
     throw new Error('Gemini returned a non-object QA result.');
   }
@@ -162,7 +108,10 @@ function parseQaResult(payload: unknown): QaResult {
     throw new Error('Gemini returned an invalid confidence value.');
   }
 
-  if (!Array.isArray(criteria) || criteria.length !== RUBRIC_CRITERIA.length) {
+  if (
+    !Array.isArray(criteria) ||
+    criteria.length !== expectedCriteriaCount
+  ) {
     throw new Error('Gemini returned an invalid criteria array.');
   }
 
@@ -294,8 +243,16 @@ async function requestQaResult(args: {
   file: GeminiFile;
   fileName: string;
   mimeType: string;
+  rubricCriteria: ReadonlyArray<RubricCriterion>;
+  passingScore: number;
 }) {
   const model = process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL;
+  const prompt = buildQaSystemPrompt(
+    args.fileName,
+    args.rubricCriteria,
+    args.passingScore
+  );
+
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${args.apiKey}`,
     {
@@ -308,7 +265,7 @@ async function requestQaResult(args: {
           {
             role: 'user',
             parts: [
-              { text: buildQaSystemPrompt(args.fileName) },
+              { text: prompt },
               {
                 fileData: {
                   mimeType: args.mimeType,
@@ -347,7 +304,10 @@ async function requestQaResult(args: {
     throw new Error('Gemini did not return a JSON scoring payload.');
   }
 
-  return parseQaResult(JSON.parse(normalizeJsonResponse(text)));
+  return parseQaResult(
+    JSON.parse(normalizeJsonResponse(text)),
+    args.rubricCriteria.length
+  );
 }
 
 export const processVideo = internalAction({
@@ -370,6 +330,28 @@ export const processVideo = internalAction({
     await ctx.runMutation(internal.videos.markProcessing, {
       videoId: video._id,
     });
+
+    // Determine which rubric to score against. Prefer the snapshot captured
+    // at upload time, then fall back to the org's current rubric, and finally
+    // to the built-in default.
+    let rubricCriteria: ReadonlyArray<RubricCriterion> =
+      DEFAULT_RUBRIC_CRITERIA;
+    let passingScore = DEFAULT_PASSING_SCORE;
+
+    if (video.rubricSnapshot) {
+      rubricCriteria = video.rubricSnapshot.criteria;
+      passingScore = video.rubricSnapshot.passingScore;
+    } else {
+      const orgRubric = await ctx.runQuery(
+        internal.rubrics.getByOrganization,
+        { organizationId: video.organizationId }
+      );
+
+      if (orgRubric) {
+        rubricCriteria = orgRubric.criteria;
+        passingScore = orgRubric.passingScore;
+      }
+    }
 
     try {
       const apiKey = process.env.GEMINI_API_KEY;
@@ -401,6 +383,8 @@ export const processVideo = internalAction({
         file: activeFile,
         fileName: video.fileName,
         mimeType: video.mimeType,
+        rubricCriteria,
+        passingScore,
       });
 
       await ctx.runMutation(internal.videos.markCompleted, {

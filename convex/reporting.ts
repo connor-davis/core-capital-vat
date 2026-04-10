@@ -21,11 +21,20 @@ export const sendReportEmail = action({
       throw new ConvexError('You must be signed in to send QA reports.');
     }
 
+    // Look up the user record to determine their organization.
+    const user = await ctx.runQuery(internal.userSync.getUserByToken, {
+      tokenIdentifier: identity.tokenIdentifier,
+    });
+
+    if (!user) {
+      throw new ConvexError('User record not found.');
+    }
+
     const video = await ctx.runQuery(internal.videos.getVideoForProcessing, {
       videoId: args.videoId,
     });
 
-    if (!video || video.userId !== identity.tokenIdentifier) {
+    if (!video || video.organizationId !== user.organizationId) {
       throw new ConvexError('The requested QA report could not be found.');
     }
 

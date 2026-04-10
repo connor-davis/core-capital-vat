@@ -1,10 +1,9 @@
 import {
-  ArrowLeft,
   CircleNotch,
   DownloadSimple,
   WarningCircle,
 } from '@phosphor-icons/react';
-import { Link, createFileRoute } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 import {
   AuthLoading,
   Authenticated,
@@ -15,9 +14,10 @@ import {
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
+import { PageHeader } from '@/components/page-header';
 import { ReportPdfDownloadButton } from '@/components/qa/report-pdf';
 import { VideoStatusBadge } from '@/components/qa/video-status-badge';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
@@ -41,38 +41,34 @@ export const Route = createFileRoute('/report/$videoId')({
 
 function ReportRoute() {
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-8">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-            QA report
-          </p>
-          <h1 className="text-2xl font-semibold">Lesson review report</h1>
-        </div>
-        <Link className={buttonVariants({ variant: 'outline' })} to="/">
-          <ArrowLeft className="size-4" />
-          Back to dashboard
-        </Link>
+    <>
+      <PageHeader
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/' },
+          { label: 'Report' },
+        ]}
+      />
+
+      <div className="flex flex-1 flex-col gap-6 p-6">
+        <AuthLoading>
+          <StateCard
+            icon={<CircleNotch className="size-5 animate-spin" />}
+            message="Loading report..."
+          />
+        </AuthLoading>
+
+        <Authenticated>
+          <ReportContent />
+        </Authenticated>
+
+        <Unauthenticated>
+          <StateCard
+            icon={<WarningCircle className="size-5 text-muted-foreground" />}
+            message="You must sign in to view this report."
+          />
+        </Unauthenticated>
       </div>
-
-      <AuthLoading>
-        <StateCard
-          icon={<CircleNotch className="size-5 animate-spin" />}
-          message="Loading report..."
-        />
-      </AuthLoading>
-
-      <Authenticated>
-        <ReportContent />
-      </Authenticated>
-
-      <Unauthenticated>
-        <StateCard
-          icon={<WarningCircle className="size-5 text-muted-foreground" />}
-          message="You must sign in to view this report."
-        />
-      </Unauthenticated>
-    </div>
+    </>
   );
 }
 
@@ -243,7 +239,7 @@ function ReportContent() {
         <CardHeader>
           <CardTitle>Rubric breakdown</CardTitle>
           <CardDescription>
-            All 21 criteria are stored as structured JSON so QA reviewers can
+            Criteria are stored as structured JSON so QA reviewers can
             audit the score.
           </CardDescription>
         </CardHeader>
@@ -276,7 +272,9 @@ function ReportContent() {
                   </p>
                 </div>
               ))
-            : RUBRIC_CRITERIA.map((criterion) => (
+            : (
+                currentReport.rubricSnapshot?.criteria ?? RUBRIC_CRITERIA
+              ).map((criterion) => (
                 <div
                   key={criterion.id}
                   className="rounded-xl border border-dashed border-border/60 p-4 text-sm text-muted-foreground"

@@ -1,5 +1,10 @@
 import { v } from 'convex/values';
 
+export const rubricCriterionValidator = v.object({
+  id: v.number(),
+  name: v.string(),
+});
+
 export const qaCriterionValidator = v.object({
   id: v.number(),
   name: v.string(),
